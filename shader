@@ -1,0 +1,80 @@
+-- ========================================================
+-- 1. โหลดและรันสคริปต์แสงเงา/Shaders ต้นทาง
+-- ========================================================
+pcall(function()
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/GhostPlayer352/Test4/main/RTX%20Gui%20Hub%20Obfuscator'))()
+end)
+
+-- ========================================================
+-- 2. ระบบ Motion Blur + Camera Tilt (เบลอ + เอียงมุมกล้อง)
+-- ========================================================
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local Camera = workspace.CurrentCamera
+
+-- สร้าง Motion Blur Effect
+local blur = Lighting:FindFirstChild("CameraMotionBlur")
+if not blur then
+    blur = Instance.new("BlurEffect")
+    blur.Name = "CameraMotionBlur"
+    blur.Size = 0
+    blur.Parent = Lighting
+end
+
+-- --------------------------------------------------------
+-- ตั้งค่าระบบ Motion Blur
+-- --------------------------------------------------------
+local BLUR_INTENSITY = 18  -- ความแรงความเบลอ
+local MAX_BLUR = 18          -- ความเบลอสูงสุด
+
+-- --------------------------------------------------------
+-- ตั้งค่าระบบ Camera Tilt (เอียงกล้อง)
+-- --------------------------------------------------------
+local TILT_INTENSITY = 0.4  -- ความแรงในการเอียง (ปรับค่านี้น้อยๆ เพื่อให้เอียงนิดเดียว)
+local MAX_TILT = 0.1        -- มุมเอียงสูงสุด (องศา)
+local TILT_SMOOTHNESS = 4   -- ความนุ่มนวลในการคืนตัวของกล้อง
+
+local lastCFrame = Camera.CFrame
+local currentTilt = 0
+
+RunService.RenderStepped:Connect(function(dt)
+    local currentCFrame = Camera.CFrame
+    
+    -- คำนวณความเร็วและทิศทางการหมุนของมุมกล้อง (Yaw / ซ้าย-ขวา)
+    local _, lastY, _ = lastCFrame:ToEulerAnglesYXZ()
+    local _, currentY, _ = currentCFrame:ToEulerAnglesYXZ()
+    
+    -- หาผลต่างของการหันมุมกล้อง
+    local deltaY = currentY - lastY
+    
+    -- รองรับกรณีมุมกล้องหมุนข้ามครบรอบ (360 องศา)
+    if deltaY > math.pi then
+        deltaY = deltaY - (math.pi * 2)
+    elseif deltaY < -math.pi then
+        deltaY = deltaY + (math.pi * 2)
+    end
+    
+    -- ====================================================
+    -- การคำนวณเอียงกล้อง (Camera Tilt)
+    -- ====================================================
+    -- คำนวณเป้าหมายมุมเอียง (องศา)
+    local targetTilt = math.clamp((deltaY / dt) * TILT_INTENSITY, -MAX_TILT, MAX_TILT)
+    
+    -- ปรับให้การเอียงนุ่มนวลขึ้น
+    currentTilt = currentTilt + (targetTilt - currentTilt) * math.min(dt * TILT_SMOOTHNESS, 1)
+    
+    -- ประยุกต์ใช้มุมเอียง (Z-axis rotation) เข้ากับมุมกล้อง
+    Camera.CFrame = Camera.CFrame * CFrame.Angles(0, 0, math.rad(currentTilt))
+    
+    -- ====================================================
+    -- การคำนวณ Motion Blur
+    -- ====================================================
+    local rotDifference = (currentCFrame - currentCFrame.Position) * (lastCFrame - lastCFrame.Position):Inverse()
+    local x, y, z = rotDifference:ToEulerAnglesXYZ()
+    local rotationSpeed = Vector3.new(x, y, z).Magnitude
+    
+    local targetBlur = math.min(rotationSpeed * (BLUR_INTENSITY / dt), MAX_BLUR)
+    blur.Size = blur.Size + (targetBlur - blur.Size) * math.min(dt * 10, 1)
+    
+    lastCFrame = currentCFrame
+end)
